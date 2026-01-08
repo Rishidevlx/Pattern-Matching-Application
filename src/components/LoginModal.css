@@ -1,0 +1,226 @@
+.login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.login-frame {
+    background: rgba(20, 10, 30, 0.95);
+    border: 1px solid rgba(0, 255, 65, 0.4);
+    border-radius: 4px;
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 0 30px rgba(0, 255, 65, 0.15),
+        inset 0 0 20px rgba(0, 255, 65, 0.05);
+    position: relative;
+    overflow: hidden;
+    animation: slideUp 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Decoration scanner line */
+.scanner-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #00ff41, transparent);
+    animation: scan 3s infinite linear;
+    opacity: 0.6;
+}
+
+@keyframes scan {
+    0% {
+        top: 0;
+    }
+
+    100% {
+        top: 100%;
+    }
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 1rem;
+}
+
+.login-title {
+    color: #00ff41;
+    font-family: 'Courier New', monospace;
+    font-size: 1.8rem;
+    letter-spacing: 4px;
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.8);
+    margin: 0;
+}
+
+.input-field-container {
+    margin-bottom: 1.8rem;
+}
+
+.input-field-container label {
+    display: block;
+    color: #00ff41;
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+    letter-spacing: 1px;
+    font-family: 'Arial', sans-serif;
+    font-weight: bold;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    padding: 0 1rem;
+    transition: all 0.3s ease;
+}
+
+.input-wrapper:focus-within {
+    border-color: #00ff41;
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
+    background: rgba(20, 0, 20, 0.8);
+}
+
+.input-prefix {
+    color: #00ff41;
+    margin-right: 10px;
+    font-weight: bold;
+    user-select: none;
+}
+
+.input-wrapper input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #fff;
+    padding: 12px 0;
+    font-size: 1.1rem;
+    font-family: 'Courier New', monospace;
+    outline: none;
+    letter-spacing: 1px;
+}
+
+.input-wrapper input::placeholder {
+    color: rgba(255, 255, 255, 0.2);
+}
+
+.error-msg {
+    color: #ff5555;
+    background: rgba(255, 85, 85, 0.1);
+    border: 1px solid rgba(255, 85, 85, 0.3);
+    padding: 0.8rem;
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    font-family: monospace;
+    animation: shake 0.4s ease-in-out;
+}
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-5px);
+    }
+
+    75% {
+        transform: translateX(5px);
+    }
+}
+
+.action-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.ghost-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
+    padding: 12px 24px;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    flex: 1;
+}
+
+.ghost-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.neon-btn {
+    background: rgba(0, 255, 65, 0.15);
+    border: 1px solid #00ff41;
+    color: #00ff41;
+    padding: 12px 24px;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    letter-spacing: 1px;
+    flex: 2;
+    text-shadow: 0 0 5px rgba(0, 255, 65, 0.5);
+}
+
+.neon-btn:hover {
+    background: #00ff41;
+    color: #000;
+    text-shadow: none;
+    box-shadow: 0 0 25px rgba(0, 255, 65, 0.6);
+}
+
+.login-footer {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.3);
+    font-family: monospace;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 1rem;
+}
