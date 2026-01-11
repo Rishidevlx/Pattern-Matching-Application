@@ -191,10 +191,8 @@ app.delete('/api/admin/patterns/:id', async (req, res) => {
     }
 });
 
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-        console.log(`Backend running on port ${PORT}`);
-    });
-}
+app.listen(PORT, () => {
+    console.log(`Backend running on port ${PORT}`);
+});
 
 module.exports = app;
