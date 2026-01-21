@@ -50,16 +50,16 @@ app.post('/api/login', async (req, res) => {
 
 // 3. Update Progress (Auto-save / Run Code)
 app.post('/api/update-progress', async (req, res) => {
-    const { lotNumber, code, codeMap, totalTime, warnings, linesOfCode, attempts, patternsCompleted } = req.body;
+    const { lotNumber, code, codeMap, totalTime, warnings, linesOfCode, noOfLoops, attempts, patternsCompleted } = req.body;
     try {
         // Store codeMap as JSON string if available, else just code
         const codeToStore = codeMap ? JSON.stringify(codeMap) : code;
 
         await db.query(`
             UPDATE users 
-            SET total_time = ?, warnings = ?, lines_of_code = ?, attempts = ?, code_data = ?, patterns_completed = ?, last_active = NOW()
-            WHERE lot_number = ?
-        `, [totalTime, warnings, linesOfCode, attempts, codeToStore, patternsCompleted || 0, lotNumber]);
+            SET total_time = ?, warnings = ?, lines_of_code = ?, no_of_loops = ?, attempts = ?, code_data = ?, patterns_completed = ?, last_active = NOW()
+            WHERE lot_number = ? AND status != 'finished'
+        `, [totalTime, warnings, linesOfCode, noOfLoops || 0, attempts, codeToStore, patternsCompleted || 0, lotNumber]);
 
         res.json({ success: true });
     } catch (err) {
@@ -70,23 +70,30 @@ app.post('/api/update-progress', async (req, res) => {
 
 // 4. Finish Level (Success)
 app.post('/api/finish', async (req, res) => {
-    const { lotNumber, totalTime, linesOfCode, attempts, codeMap, patternsCompleted } = req.body;
+    const { lotNumber, totalTime, linesOfCode, noOfLoops, attempts, codeMap, patternsCompleted } = req.body;
     try {
         const codeToStore = codeMap ? JSON.stringify(codeMap) : null;
         let query = `
             UPDATE users 
-            SET status = 'finished', end_time = ?, total_time = ?, lines_of_code = ?, attempts = ?, patterns_completed = ?
+            SET status = 'finished', end_time = ?, total_time = ?, lines_of_code = ?, no_of_loops = ?, attempts = ?, patterns_completed = ?
             WHERE lot_number = ?
         `;
-        let params = [Date.now(), totalTime, linesOfCode, attempts, patternsCompleted || 0, lotNumber];
+        let params = [Date.now(), totalTime, linesOfCode, noOfLoops || 0, attempts, patternsCompleted || 0, lotNumber];
 
         if (codeToStore) {
             query = `
                 UPDATE users 
-                SET status = 'finished', end_time = ?, total_time = ?, lines_of_code = ?, attempts = ?, code_data = ?
+                SET status = 'finished', end_time = ?, total_time = ?, lines_of_code = ?, no_of_loops = ?, attempts = ?, patterns_completed = ?, warnings = ?, code_data = ?
                 WHERE lot_number = ?
             `;
-            params = [Date.now(), totalTime, linesOfCode, attempts, codeToStore, lotNumber];
+            params = [Date.now(), totalTime, linesOfCode, noOfLoops || 0, attempts, patternsCompleted || 0, req.body.warnings || 0, codeToStore, lotNumber];
+        } else {
+            query = `
+                UPDATE users 
+                SET status = 'finished', end_time = ?, total_time = ?, lines_of_code = ?, no_of_loops = ?, attempts = ?, patterns_completed = ?, warnings = ?
+                WHERE lot_number = ?
+            `;
+            params = [Date.now(), totalTime, linesOfCode, noOfLoops || 0, attempts, patternsCompleted || 0, req.body.warnings || 0, lotNumber];
         }
 
         await db.query(query, params);
@@ -96,17 +103,19 @@ app.post('/api/finish', async (req, res) => {
     }
 });
 
-// 5. Leaderboard (Admin) - Kept same, but we can reuse for Participants list too if we want
+// 5. Leaderboard (Admin) - Updated sorting logic
 app.get('/api/leaderboard', async (req, res) => {
     try {
         const [rows] = await db.query(`
             SELECT * FROM users 
             ORDER BY 
                 patterns_completed DESC,
+                (status = 'finished') DESC,
                 total_time ASC,
+                no_of_loops ASC,
                 lines_of_code ASC,
-                attempts ASC,
-                last_active ASC
+                warnings ASC,
+                attempts ASC
         `);
         res.json(rows);
     } catch (err) {

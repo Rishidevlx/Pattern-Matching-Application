@@ -71,10 +71,10 @@ const Dashboard = () => {
                             <th>STATUS</th>
                             <th>PATTERNS</th>
                             <th>TIME ELAPSED</th>
+                            <th>NO OF LOOP</th>
                             <th>LOC</th>
                             <th>WARNINGS</th>
                             <th>ATTEMPTS</th>
-                            <th>LAST PING</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -99,6 +99,7 @@ const Dashboard = () => {
                                 </td>
                                 <td style={{ textAlign: 'center', fontWeight: 'bold', color: '#00ffff' }}>{user.patterns_completed || 0}</td>
                                 <td style={{ fontFamily: 'monospace', fontSize: '1.1rem', color: '#00ff41' }}>{formatTime(user.total_time)}</td>
+                                <td style={{ fontWeight: 'bold', color: '#ffcc00' }}>{user.no_of_loops || 0}</td>
                                 <td style={{ fontWeight: 'bold' }}>{user.lines_of_code}</td>
                                 <td>
                                     {user.warnings > 0 ? (
@@ -108,9 +109,6 @@ const Dashboard = () => {
                                     ) : <span style={{ opacity: 0.3 }}>-</span>}
                                 </td>
                                 <td>{user.attempts}</td>
-                                <td style={{ fontSize: '0.8rem', opacity: 0.4, fontStyle: 'italic' }}>
-                                    {new Date(user.last_active).toLocaleTimeString()}
-                                </td>
                             </motion.tr>
                         ))}
                         {users.length === 0 && (

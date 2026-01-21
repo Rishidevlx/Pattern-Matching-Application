@@ -65,6 +65,8 @@ body {
   align-items: center;
   gap: 10px;
   font-weight: bold;
+  color: #fff;
+  text-decoration: none;
 }
 
 .nav-item:hover,

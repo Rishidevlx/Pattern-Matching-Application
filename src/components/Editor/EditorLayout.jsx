@@ -7,8 +7,17 @@ import Terminal from './Terminal';
 // REMOVED HARDCODED PATTERN
 
 const EditorLayout = ({ userData }) => {
+    // STAGE CONSTANTS
+    const STORAGE_KEY_MAP = `qmaze_codemap_${userData.lotNo}`;
+    const STORAGE_KEY_COMPLETED = `qmaze_completed_${userData.lotNo}`;
+
     // Stores code for each pattern: { [patternId]: "code..." }
-    const [codeMap, setCodeMap] = useState({});
+    const [codeMap, setCodeMap] = useState(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY_MAP);
+            return saved ? JSON.parse(saved) : {};
+        } catch (e) { return {}; }
+    });
 
     // Helper to get default code based on language
     const getDefaultCode = (lang) => {
@@ -23,12 +32,30 @@ const EditorLayout = ({ userData }) => {
     const [isRunning, setIsRunning] = useState(false);
     const [isSessionActive, setIsSessionActive] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [attempts, setAttempts] = useState(0);
+    const [warningCount, setWarningCount] = useState(0); // Security Warning Counter
 
     // Pattern State
     const [currentPattern, setCurrentPattern] = useState(null);
     const [allPatterns, setAllPatterns] = useState([]);
-    const [completedPatterns, setCompletedPatterns] = useState([]); // Track completed IDs
+
+    // Track completed IDs (Persisted)
+    const [completedPatterns, setCompletedPatterns] = useState(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY_COMPLETED);
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) { return []; }
+    });
+
     const [showLevelSuccess, setShowLevelSuccess] = useState(false); // New state for temporary success overlay
+
+    // --- PERSISTENCE EFFECT ---
+    useEffect(() => {
+        if (userData.lotNo) {
+            localStorage.setItem(STORAGE_KEY_MAP, JSON.stringify(codeMap));
+            localStorage.setItem(STORAGE_KEY_COMPLETED, JSON.stringify(completedPatterns));
+        }
+    }, [codeMap, completedPatterns, userData]);
 
     // Fetch Patterns on Mount
     useEffect(() => {
@@ -37,15 +64,21 @@ const EditorLayout = ({ userData }) => {
                 const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/patterns`);
                 const data = await res.json();
                 setAllPatterns(data);
-                // Set first level pattern
-                if (data.length > 0) {
+                // Set first level pattern if not set
+                if (data.length > 0 && !currentPattern) {
                     setCurrentPattern(data[0]);
-                    // Initialize codeMap for all patterns
-                    const initialMap = {};
-                    data.forEach(p => {
-                        initialMap[p.id] = getDefaultCode('c');
+
+                    // Initialize codeMap for all patterns ONLY if empty (first time)
+                    // If we loaded from storage, codeMap might already have data, so we merge carefully
+                    setCodeMap(prev => {
+                        const newMap = { ...prev };
+                        data.forEach(p => {
+                            if (!newMap[p.id]) {
+                                newMap[p.id] = getDefaultCode('c');
+                            }
+                        });
+                        return newMap;
                     });
-                    setCodeMap(initialMap);
                 }
             } catch (err) {
                 console.error("Failed to load patterns");
@@ -119,38 +152,89 @@ const EditorLayout = ({ userData }) => {
         }
     };
 
+    // --- STATE REFS FOR INTERVAL ACCESS ---
+    const stateRef = React.useRef({
+        codeMap: {},
+        metrics: { time: 3600000 },
+        completedPatterns: [],
+        currentCode: '',
+        currentPattern: null,
+        attempts: 0,
+        warningCount: 0
+    });
+
+    // Update Ref on every render/change
+    useEffect(() => {
+        stateRef.current = {
+            codeMap,
+            metrics,
+            completedPatterns,
+            currentCode,
+            currentPattern,
+            attempts,
+            warningCount
+        };
+    }, [codeMap, metrics, completedPatterns, currentCode, currentPattern, attempts, warningCount]);
+
+    // Helper: Calculate Totals
+    const calculateTotalStats = (map) => {
+        let totalLOC = 0;
+        let totalLoops = 0;
+        Object.values(map).forEach(code => {
+            if (typeof code === 'string') {
+                // Count LOC
+                totalLOC += code.split('\n').filter(line => line.trim() !== '').length;
+                // Count Loops
+                const matches = code.match(/\b(for|while|do)\b/g);
+                totalLoops += matches ? matches.length : 0;
+            }
+        });
+        return { totalLOC, totalLoops };
+    };
+
+    // CORE SYNC FUNCTION
+    const triggerSync = async (overrides = {}) => {
+        if (!userData.lotNo) return;
+
+        try {
+            const currentState = stateRef.current;
+            const activeCode = overrides.code || currentState.currentCode;
+            const activeMap = overrides.codeMap || currentState.codeMap;
+            const activeCompleted = overrides.completedPatterns || currentState.completedPatterns;
+
+            // Ensure current code is in the map
+            const cleanMap = { ...activeMap };
+            if (currentState.currentPattern) {
+                cleanMap[currentState.currentPattern.id] = activeCode;
+            }
+
+            const { totalLOC, totalLoops } = calculateTotalStats(cleanMap);
+            const timeTaken = 3600000 - currentState.metrics.time;
+
+            await fetch(`${import.meta.env.VITE_API_URL}/api/update-progress`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lotNumber: userData.lotNo,
+                    code: activeCode,
+                    codeMap: cleanMap,
+                    totalTime: timeTaken,
+                    linesOfCode: totalLOC,
+                    noOfLoops: totalLoops,
+                    attempts: 0,
+                    warnings: currentState.warningCount,
+                    patternsCompleted: activeCompleted.length
+                })
+            });
+        } catch (err) { console.error("Sync failed", err); }
+    };
+
     // 2. Periodic Progress Sync (Every 5 seconds)
     useEffect(() => {
         if (!isSessionActive || isSuccess) return;
-
-        const syncProgress = async () => {
-            try {
-                // Calculate Time Taken (Total - Remaining)
-                const timeTaken = 3600000 - metrics.time;
-                // Count LOC (approx formatting)
-                const loc = currentCode.split('\n').filter(line => line.trim() !== '').length;
-
-                await fetch(`${import.meta.env.VITE_API_URL}/api/update-progress`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lotNumber: userData.lotNo,
-                        code: currentCode,
-                        codeMap: codeMap,
-                        totalTime: timeTaken,
-                        linesOfCode: loc,
-                        attempts: 0,
-                        patternsCompleted: completedPatterns.length
-                    })
-                });
-            } catch (err) { }
-        };
-
-        const interval = setInterval(syncProgress, 5000);
+        const interval = setInterval(() => triggerSync(), 5000);
         return () => clearInterval(interval);
-    }, [isSessionActive, isSuccess, metrics.time, currentCode, userData]);
-
-    const [attempts, setAttempts] = useState(0);
+    }, [isSessionActive, isSuccess]);
 
     const handleRun = async () => {
         if (isRunning || !isSessionActive) return;
@@ -192,9 +276,15 @@ const EditorLayout = ({ userData }) => {
                 if (!result.run.stderr && checkPatternMatch(output)) {
                     // Add to completed list
                     const newCompleted = [...completedPatterns];
+                    let isNewCompletion = false;
+
                     if (!newCompleted.includes(currentPattern.id)) {
                         newCompleted.push(currentPattern.id);
                         setCompletedPatterns(newCompleted);
+                        isNewCompletion = true;
+
+                        // IMMEDIATE SYNC TO DB (Critical Fix)
+                        triggerSync({ completedPatterns: newCompleted });
 
                         // Show immediate success message
                         setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '>>> PATTERN MATCHED! ACCESS GRANTED. <<<', type: 'success' }]);
@@ -225,7 +315,10 @@ const EditorLayout = ({ userData }) => {
                         setIsSessionActive(false);
                         // --- SYNC SUCCESS ---
                         const timeTaken = 3600000 - metrics.time;
-                        const loc = currentCode.split('\n').filter(line => line.trim() !== '').length;
+
+                        // Prepare Final Stats
+                        const finalMap = { ...codeMap, [currentPattern.id]: currentCode };
+                        const { totalLOC, totalLoops } = calculateTotalStats(finalMap);
 
                         fetch(`${import.meta.env.VITE_API_URL}/api/finish`, {
                             method: 'POST',
@@ -233,10 +326,11 @@ const EditorLayout = ({ userData }) => {
                             body: JSON.stringify({
                                 lotNumber: userData.lotNo,
                                 totalTime: timeTaken,
-                                linesOfCode: loc,
-                                linesOfCode: loc,
+                                linesOfCode: totalLOC,
+                                noOfLoops: totalLoops,
                                 attempts: currentAttempts,
-                                codeMap: codeMap,
+                                warnings: warningCount,
+                                codeMap: finalMap,
                                 patternsCompleted: newCompleted.length
                             })
                         }).catch(console.error);
@@ -291,6 +385,8 @@ const EditorLayout = ({ userData }) => {
 
     const handlePasteError = () => {
         setPasteError(true);
+        setWarningCount(prev => prev + 1); // Increment warning on paste violation
+        setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '>>> SYSTEM ALERT: UNAUTHORIZED PASTE ATTEMPT DETECTED. <<<', type: 'error' }]);
         setTimeout(() => setPasteError(false), 3000);
     };
 
@@ -300,7 +396,8 @@ const EditorLayout = ({ userData }) => {
             const focusSecurityEnabled = sessionStorage.getItem('FOCUS_SECURITY') === 'true';
             if (document.hidden && isSessionActive && !isSuccess && focusSecurityEnabled) {
                 setIsFocused(false);
-                setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '>>> SECURITY ALERT: WINDOW FOCUS LOST! <<<', type: 'error' }]);
+                setWarningCount(prev => prev + 1); // Increment warning on focus loss
+                setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '>>> SYSTEM ALERT: HOST WINDOW FOCUS LOST. VIOLATION RECORDED. <<<', type: 'error' }]);
             }
         };
 
@@ -315,33 +412,47 @@ const EditorLayout = ({ userData }) => {
                 sessionStorage.setItem('PASTE_SECURITY', data.PASTE_SECURITY);
                 sessionStorage.setItem('FOCUS_SECURITY', data.FOCUS_SECURITY);
 
-                // Only update time if we haven't started (optional, keeps it sync)
-                // Actually, we should set initial time only once on mount, 
-                // but this interval is for security toggles.
+                // SYNC TIME LIVE BEFORE START
+                if (!isSessionActive) {
+                    let durationMs = null;
+                    if (data.SESSION_DURATION_MS) durationMs = parseInt(data.SESSION_DURATION_MS);
+                    else if (data.SESSION_DURATION_MINUTES) durationMs = parseInt(data.SESSION_DURATION_MINUTES) * 60 * 1000;
+
+                    if (durationMs && !isNaN(durationMs)) {
+                        setMetrics(prev => {
+                            if (prev.time !== durationMs) return { ...prev, time: durationMs };
+                            return prev;
+                        });
+                    }
+                }
             } catch (err) { }
-        }, 5000);
+        }, 2000); // Check every 2 seconds for faster updates
 
         // Initial Settings Fetch including Duration
         const fetchInitialSettings = async () => {
             try {
                 const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`);
                 const data = await res.json();
+                console.log("FETCHED SETTINGS:", data); // Debugging
+
                 sessionStorage.setItem('PASTE_SECURITY', data.PASTE_SECURITY);
                 sessionStorage.setItem('FOCUS_SECURITY', data.FOCUS_SECURITY);
 
+                // Robust Duration Parsing
+                let durationMs = null;
                 if (data.SESSION_DURATION_MS) {
-                    const ms = parseInt(data.SESSION_DURATION_MS);
-                    if (!isNaN(ms) && !isSessionActive) {
-                        setMetrics(prev => ({ ...prev, time: ms }));
-                    }
+                    durationMs = parseInt(data.SESSION_DURATION_MS);
                 } else if (data.SESSION_DURATION_MINUTES) {
-                    // Fallback for legacy
-                    const mins = parseInt(data.SESSION_DURATION_MINUTES);
-                    if (!isNaN(mins) && !isSessionActive) {
-                        setMetrics(prev => ({ ...prev, time: mins * 60 * 1000 }));
+                    durationMs = parseInt(data.SESSION_DURATION_MINUTES) * 60 * 1000;
+                }
+
+                if (durationMs && !isNaN(durationMs)) {
+                    console.log("SETTING DURATION TO:", durationMs);
+                    if (!isSessionActive) {
+                        setMetrics(prev => ({ ...prev, time: durationMs }));
                     }
                 }
-            } catch (err) { }
+            } catch (err) { console.error("Error fetching settings:", err); }
         };
         fetchInitialSettings();
 
@@ -356,10 +467,43 @@ const EditorLayout = ({ userData }) => {
         setIsFocused(true);
     };
 
+    // --- RESIZABLE TERMINAL LOGIC ---
+    const [terminalHeight, setTerminalHeight] = useState(180); // Default 180px
+    const [isResizing, setIsResizing] = useState(false);
+
+    const startResizing = React.useCallback((mouseDownEvent) => {
+        setIsResizing(true);
+    }, []);
+
+    const stopResizing = React.useCallback(() => {
+        setIsResizing(false);
+    }, []);
+
+    const resize = React.useCallback((mouseMoveEvent) => {
+        if (isResizing) {
+            // Calculate new height from bottom
+            const newHeight = window.innerHeight - mouseMoveEvent.clientY;
+            if (newHeight > 50 && newHeight < window.innerHeight - 100) {
+                setTerminalHeight(newHeight);
+            }
+        }
+    }, [isResizing]);
+
+    useEffect(() => {
+        window.addEventListener("mousemove", resize);
+        window.addEventListener("mouseup", stopResizing);
+        return () => {
+            window.removeEventListener("mousemove", resize);
+            window.removeEventListener("mouseup", stopResizing);
+        };
+    }, [resize, stopResizing]);
+
+
     return (
         <div className="editor-layout" style={{
             height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column',
-            background: '#0e1015', color: '#e0e0e0', fontFamily: 'Inter, sans-serif', position: 'relative'
+            background: '#0e1015', color: '#e0e0e0', fontFamily: 'Inter, sans-serif', position: 'relative',
+            userSelect: isResizing ? 'none' : 'auto' // Prevent text selection while resizing
         }}>
             {/* Security Overlay */}
             {!isFocused && (
@@ -376,9 +520,9 @@ const EditorLayout = ({ userData }) => {
 
             {/* Top Navigation Bar */}
             <div className="top-nav" style={{
-                height: '50px', background: '#1a1d26', borderBottom: '1px solid #000', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 1rem', boxShadow: '0 2px 10px rgba(0,0,0,0.5)', position: 'relative'
+                height: '50px', background: '#1a1d26', borderBottom: '1px solid #000', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 1rem', boxShadow: '0 2px 10px rgba(0,0,0,0.5)', position: 'relative', flexShrink: 0
             }}>
-                {/* ... (Same Top Nav content as before, keeping brevity where unchanged) ... */}
+                {/* ... (Same Top Nav content) ... */}
 
                 {/* Left: Brand & File Tabs */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
@@ -434,7 +578,7 @@ const EditorLayout = ({ userData }) => {
 
             {/* Main Workspace Split */}
             <div className="workspace-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#1e1e1e' }}>
-                <div className="upper-pane" style={{ flex: 2, display: 'flex', minHeight: '60vh' }}>
+                <div className="upper-pane" style={{ flex: 1, display: 'flex', minHeight: '0' }}> {/* flex 1 auto-grows to take available space */}
                     {/* LEFT COLUMN: Editor + Tabs */}
                     <div style={{ flex: 1, position: 'relative', borderRight: '1px solid #333', height: '100%', display: 'flex', flexDirection: 'column' }}>
                         {/* TAB BAR */}
@@ -467,7 +611,7 @@ const EditorLayout = ({ userData }) => {
                             })}
                         </div>
 
-                        <div style={{ flex: 1, position: 'relative' }}>
+                        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
                             <CodeEditor
                                 key={currentPattern?.id}
                                 code={currentCode}
@@ -534,10 +678,10 @@ const EditorLayout = ({ userData }) => {
                                             linear-gradient(transparent 0%, rgba(0, 255, 65, 0.2) 2%, transparent 5%),
                                             linear-gradient(90deg, transparent 0%, rgba(0, 255, 65, 0.2) 2%, transparent 5%)
                                         `,
-                                        backgroundSize: '50px 50px',
+                                        backgroundSize: '80px 80px',
                                         transform: 'rotateX(60deg) translateY(-100px) translateZ(-200px)',
-                                        animation: 'gridMove 20s linear infinite',
-                                        opacity: 0.3
+                                        animation: 'gridMove 10s linear infinite',
+                                        opacity: 0.4
                                     }}></div>
 
                                     {/* CSS Fireworks Container */}
@@ -547,37 +691,52 @@ const EditorLayout = ({ userData }) => {
                                     </div>
 
                                     {/* Main Glitch Text */}
-                                    <h1 className="glitch-text" data-text="Pattern Matched" style={{
-                                        fontSize: '5rem', color: '#fff', fontFamily: 'Orbitron', fontWeight: '900',
+                                    <h1 className="glitch-text" data-text="MISSION ACCOMPLISHED" style={{
+                                        fontSize: '5rem', color: '#00ff41', fontFamily: 'Orbitron', fontWeight: '900',
                                         textTransform: 'uppercase', position: 'relative', zIndex: 10,
-                                        letterSpacing: '5px'
+                                        letterSpacing: '5px',
+                                        textShadow: '0 0 30px #00ff41'
                                     }}>
-                                        Pattern Matched
+                                        MISSION ACCOMPLISHED
                                     </h1>
 
                                     <div style={{
-                                        marginTop: '20px', fontSize: '2rem', color: '#00ff41', fontFamily: 'monospace',
-                                        background: 'rgba(0,0,0,0.8)', padding: '10px 30px', border: '1px solid #00ff41',
-                                        boxShadow: '0 0 20px #00ff41', zIndex: 10, position: 'relative'
+                                        marginTop: '40px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '20px',
+                                        zIndex: 10
                                     }}>
-                                        DONE !
                                         <div style={{
-                                            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                                            background: 'linear-gradient(rgba(0,255,65,0), rgba(0,255,65,0.1))',
-                                            animation: 'scanline 2s linear infinite'
-                                        }}></div>
+                                            border: '2px solid #00ff41',
+                                            padding: '20px 50px',
+                                            fontSize: '1.5rem',
+                                            fontFamily: 'Orbitron',
+                                            color: 'white',
+                                            background: 'rgba(0,0,0,0.7)',
+                                            boxShadow: '0 0 20px rgba(0,255,65,0.4)',
+                                            animation: 'pulse 2s infinite'
+                                        }}>
+                                            ALL PATTERNS MATCHED
+                                        </div>
+                                        <div style={{ fontSize: '1.2rem', color: '#00ccff', fontFamily: 'Consolas' }}>
+                                            SESSION TERMINATED SUCCESSFULLY
+                                        </div>
                                     </div>
 
                                     {/* Rotating Ring */}
                                     <div style={{
-                                        position: 'absolute', width: '600px', height: '600px',
-                                        border: '2px dashed #00ff4144', borderRadius: '50%',
-                                        animation: 'spin 20s linear infinite'
+                                        position: 'absolute', width: '800px', height: '800px',
+                                        border: '4px dashed rgba(0,255,65,0.5)', borderRadius: '50%',
+                                        animation: 'spin 30s linear infinite'
                                     }}></div>
                                     <div style={{
-                                        position: 'absolute', width: '500px', height: '500px',
-                                        border: '2px solid #00ff4122', borderRadius: '50%',
-                                        animation: 'spin 15s linear infinite reverse'
+                                        position: 'absolute', width: '650px', height: '650px',
+                                        border: '6px solid rgba(0,255,65,0.2)', borderRadius: '50%',
+                                        borderLeftColor: 'transparent',
+                                        borderRightColor: 'transparent',
+                                        animation: 'spin 20s linear infinite reverse'
                                     }}></div>
                                 </div>
                             )}
@@ -596,26 +755,40 @@ const EditorLayout = ({ userData }) => {
             {/* Lower Terminal */}
             {/* Lower Terminal - HIDDEN ON SUCCESS */}
             {!isSuccess && (
-                <div className="lower-pane" style={{ flex: 1, position: 'relative', marginTop: '10px' }}>
-                    <div style={{ height: '180px', flexShrink: 0, borderTop: '2px solid #00ffff' }}>
-                        <Terminal logs={logs} onClear={handleClearLogs} />
+                <>
+                    {/* DRAG HANDLE */}
+                    <div
+                        onMouseDown={startResizing}
+                        style={{
+                            height: '5px',
+                            background: isResizing ? '#00ffff' : '#333',
+                            cursor: 'ns-resize',
+                            transition: 'background 0.2s',
+                            zIndex: 100
+                        }}
+                    />
+
+                    <div className="lower-pane" style={{ height: `${terminalHeight}px`, flexShrink: 0, position: 'relative' }}>
+                        <div style={{ height: '100%', flexShrink: 0, borderTop: '2px solid #00ffff' }}>
+                            <Terminal logs={logs} onClear={handleClearLogs} />
+                        </div>
+                        {/* NOTE BELOW TERMINAL */}
+                        <div style={{
+                            position: 'absolute',
+                            bottom: '5px',
+                            right: '10px',
+                            color: '#ffaa00',
+                            fontSize: '0.8rem',
+                            fontFamily: 'Consolas',
+                            background: 'rgba(0,0,0,0.8)',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid #ffaa00'
+                        }}>
+                            Note: After selecting a programming language, all patterns must be done in the same language.
+                        </div>
                     </div>
-                    {/* NOTE BELOW TERMINAL */}
-                    <div style={{
-                        position: 'absolute',
-                        bottom: '5px',
-                        right: '10px',
-                        color: '#ffaa00',
-                        fontSize: '0.8rem',
-                        fontFamily: 'Consolas',
-                        background: 'rgba(0,0,0,0.8)',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        border: '1px solid #ffaa00'
-                    }}>
-                        Note: After selecting a programming language, all patterns must be done in the same language.
-                    </div>
-                </div>
+                </>
             )}
 
             <style>{`
@@ -715,5 +888,4 @@ const EditorLayout = ({ userData }) => {
         </div>
     );
 };
-
 export default EditorLayout;

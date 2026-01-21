@@ -12,6 +12,7 @@ const Settings = () => {
     // Duration State
     const [duration, setDuration] = useState({ hours: 1, minutes: 0, seconds: 0, milis: 0 });
     const [loading, setLoading] = useState(true);
+    const [saveStatus, setSaveStatus] = useState(null); // 'saving', 'success', 'error'
 
     useEffect(() => {
         fetchSettings();
@@ -58,12 +59,16 @@ const Settings = () => {
     };
 
     const saveDuration = async () => {
+        setSaveStatus('saving');
         try {
             const totalMs = (duration.hours * 3600000) + (duration.minutes * 60000) + (duration.seconds * 1000) + duration.milis;
             await axios.post(`${import.meta.env.VITE_API_URL}/api/settings`, { key: 'SESSION_DURATION_MS', value: String(totalMs) });
-            alert("Duration Updated Successfully!");
+            setSaveStatus('success');
+            setTimeout(() => setSaveStatus(null), 2000);
         } catch (err) {
             console.error("Failed to update duration");
+            setSaveStatus('error');
+            setTimeout(() => setSaveStatus(null), 2000);
         }
     };
 
@@ -138,18 +143,21 @@ const Settings = () => {
                         ))}
                         <button
                             onClick={saveDuration}
+                            disabled={saveStatus === 'saving'}
                             style={{
                                 padding: '10px 20px',
-                                background: '#333',
-                                color: '#fff',
+                                background: saveStatus === 'success' ? '#00ff41' : (saveStatus === 'error' ? '#ff0033' : '#333'),
+                                color: saveStatus === 'success' ? '#000' : '#fff',
                                 border: '1px solid #555',
                                 fontWeight: 'bold',
                                 cursor: 'pointer',
                                 marginLeft: '10px',
-                                height: '40px'
+                                height: '40px',
+                                minWidth: '80px',
+                                transition: 'all 0.3s ease'
                             }}
                         >
-                            SAVE
+                            {saveStatus === 'saving' ? '...' : (saveStatus === 'success' ? 'SAVED' : (saveStatus === 'error' ? 'ERR' : 'SAVE'))}
                         </button>
                     </div>
                 </div>
