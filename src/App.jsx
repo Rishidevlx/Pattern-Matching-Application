@@ -5,14 +5,14 @@ import EditorLayout from './components/Editor/EditorLayout';
 
 function App() {
   const [view, setView] = useState('landing'); // landing, login, editor
-  const [userData, setUserData] = useState({ lotNo: '', lotName: '' });
+  const [userData, setUserData] = useState({ lotNo: '', lotName: '', collegeName: '' });
 
   const handleStart = () => {
     setView('login');
   };
 
-  const handleLogin = (lotNo, lotName) => {
-    setUserData({ lotNo, lotName });
+  const handleLogin = (lotNo, lotName, collegeName) => {
+    setUserData({ lotNo, lotName, collegeName });
     setView('editor');
   };
 

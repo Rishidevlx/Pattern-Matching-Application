@@ -53,6 +53,30 @@ async function initDB() {
         await connection.query(patternTable);
         console.log('Table patterns created.');
 
+        // 5. Create System Config Table
+        const configTable = `
+            CREATE TABLE IF NOT EXISTS system_config (
+                setting_key VARCHAR(50) PRIMARY KEY,
+                setting_value TEXT
+            )
+        `;
+        await connection.query(configTable);
+        console.log('Table system_config created.');
+
+        // 6. Insert Default Settings
+        const defaultSettings = [
+            ['SESSION_DURATION_MINUTES', '60'],
+            ['PASTE_SECURITY', 'true'],
+            ['FOCUS_SECURITY', 'true']
+        ];
+
+        for (const [key, value] of defaultSettings) {
+            await connection.query(`
+                INSERT IGNORE INTO system_config (setting_key, setting_value) VALUES (?, ?)
+            `, [key, value]);
+        }
+        console.log('Default settings inserted.');
+
         // 4. Insert Default Pattern (Triangle)
         const defaultPattern = `* * * * *
 *     *

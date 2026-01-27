@@ -4,15 +4,16 @@ import './LoginModal.css';
 const LoginModal = ({ onLogin, onBack }) => {
     const [lotNo, setLotNo] = useState('');
     const [lotName, setLotName] = useState('');
+    const [collegeName, setCollegeName] = useState('');
     const [error, setError] = useState('');
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (!lotNo || !lotName) {
+        if (!lotNo || !lotName || !collegeName) {
             setError('ACCESS DENIED: MISSING CREDENTIALS');
             return;
         }
-        onLogin(lotNo, lotName);
+        onLogin(lotNo, lotName, collegeName);
     };
 
     return (
@@ -43,7 +44,7 @@ const LoginModal = ({ onLogin, onBack }) => {
                     </div>
 
                     <div className="input-field-container">
-                        <label>LOT NAME</label>
+                        <label> NAME</label>
                         <div className="input-wrapper">
                             <span className="input-prefix">&gt;</span>
                             <input
@@ -51,6 +52,20 @@ const LoginModal = ({ onLogin, onBack }) => {
                                 value={lotName}
                                 onChange={(e) => setLotName(e.target.value)}
                                 placeholder="ALPHA_SQUAD"
+                                autoComplete="off"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="input-field-container">
+                        <label>COLLEGE NAME</label>
+                        <div className="input-wrapper">
+                            <span className="input-prefix">@</span>
+                            <input
+                                type="text"
+                                value={collegeName}
+                                onChange={(e) => setCollegeName(e.target.value)}
+                                placeholder="INSTITUTE_OF_TECH"
                                 autoComplete="off"
                             />
                         </div>

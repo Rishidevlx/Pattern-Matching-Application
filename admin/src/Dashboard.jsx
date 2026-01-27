@@ -68,9 +68,10 @@ const Dashboard = () => {
                         <tr style={{ background: '#111' }}>
                             <th style={{ width: '60px', padding: '15px', textAlign: 'center' }}>RANK</th>
                             <th>OPERATOR (ID)</th>
+                            <th>COLLEGE</th>
                             <th>STATUS</th>
                             <th>PATTERNS</th>
-                            <th>TIME ELAPSED</th>
+                            <th>TIME (HR:MN:SC:MS)</th>
                             <th>NO OF LOOP</th>
                             <th>LOC</th>
                             <th>WARNINGS</th>
@@ -94,6 +95,7 @@ const Dashboard = () => {
                                     <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '1rem' }}>{user.lot_name}</div>
                                     <div style={{ fontSize: '0.75rem', opacity: 0.5, letterSpacing: '1px' }}>{user.lot_number}</div>
                                 </td>
+                                <td style={{ color: '#00ccff', fontSize: '0.9rem' }}>{user.college_name || '-'}</td>
                                 <td>
                                     <StatusBadge status={user.status} />
                                 </td>

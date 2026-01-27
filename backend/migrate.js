@@ -12,7 +12,18 @@ const runMigration = async () => {
             if (err.code === 'ER_DUP_FIELDNAME') {
                 console.log("Column 'no_of_loops' already exists.");
             } else {
-                throw err;
+                console.warn("Prepare error (no_of_loops):", err.message);
+            }
+        }
+
+        try {
+            await db.query(`ALTER TABLE users ADD COLUMN college_name VARCHAR(255)`);
+            console.log("SUCCESS: Added 'college_name' column.");
+        } catch (err) {
+            if (err.code === 'ER_DUP_FIELDNAME') {
+                console.log("Column 'college_name' already exists.");
+            } else {
+                console.warn("Prepare error (college_name):", err.message);
             }
         }
         process.exit(0);

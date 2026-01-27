@@ -28,12 +28,14 @@ const EditorLayout = ({ userData }) => {
 
     // Current active code (derived from map)
     const [language, setLanguage] = useState('c');
+    const [initialDuration, setInitialDuration] = useState(3600000);
     const [metrics, setMetrics] = useState({ time: 3600000 });
     const [isRunning, setIsRunning] = useState(false);
     const [isSessionActive, setIsSessionActive] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const [attempts, setAttempts] = useState(0);
     const [warningCount, setWarningCount] = useState(0); // Security Warning Counter
+    const [isDisqualified, setIsDisqualified] = useState(false);
 
     // Pattern State
     const [currentPattern, setCurrentPattern] = useState(null);
@@ -65,20 +67,11 @@ const EditorLayout = ({ userData }) => {
                 const data = await res.json();
                 setAllPatterns(data);
                 // Set first level pattern if not set
+                // Set first level pattern if not set
                 if (data.length > 0 && !currentPattern) {
                     setCurrentPattern(data[0]);
 
-                    // Initialize codeMap for all patterns ONLY if empty (first time)
-                    // If we loaded from storage, codeMap might already have data, so we merge carefully
-                    setCodeMap(prev => {
-                        const newMap = { ...prev };
-                        data.forEach(p => {
-                            if (!newMap[p.id]) {
-                                newMap[p.id] = getDefaultCode('c');
-                            }
-                        });
-                        return newMap;
-                    });
+                    // Do NOT pre-fill codeMap. Let it fallback to active language.
                 }
             } catch (err) {
                 console.error("Failed to load patterns");
@@ -110,20 +103,46 @@ const EditorLayout = ({ userData }) => {
         setLogs([{ time: new Date().toLocaleTimeString(), text: 'Terminal Cleared', type: 'system' }]);
     };
 
-
-    // Timer Logic
+    // Timer Logic & Disqualification
     useEffect(() => {
         let timer;
-        if (isSessionActive && metrics.time > 0 && !isSuccess) {
+        if (isSessionActive && metrics.time > 0 && !isSuccess && !isDisqualified) {
             timer = setInterval(() => {
-                setMetrics(prev => ({
-                    ...prev,
-                    time: Math.max(0, prev.time - 10)
-                }));
+                setMetrics(prev => {
+                    const newTime = Math.max(0, prev.time - 10);
+                    if (newTime === 0) {
+                        // Trigger Disqualification immediately
+                        clearInterval(timer);
+                    }
+                    return { ...prev, time: newTime };
+                });
             }, 10); // Update every 10ms for smooth millisecond display
         }
         return () => clearInterval(timer);
-    }, [isSessionActive, metrics.time, isSuccess]);
+    }, [isSessionActive, metrics.time, isSuccess, isDisqualified]);
+
+    // Separate Effect to handle Time Up
+    useEffect(() => {
+        if (isSessionActive && metrics.time === 0 && !isSuccess && !isDisqualified) {
+            handleDisqualify();
+        }
+    }, [metrics.time, isSessionActive, isSuccess, isDisqualified]);
+
+    const handleDisqualify = async () => {
+        setIsSessionActive(false);
+        setIsDisqualified(true);
+        setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: '>>> TIME LIMIT EXCEEDED. SYSTEM HALTED. <<<', type: 'error' }]);
+
+        try {
+            await fetch(`${import.meta.env.VITE_API_URL}/api/disqualify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lotNumber: userData.lotNo })
+            });
+        } catch (err) {
+            console.error("Failed to disqualify user", err);
+        }
+    };
 
     const formatTime = (ms) => {
         const h = Math.floor(ms / 3600000);
@@ -144,7 +163,9 @@ const EditorLayout = ({ userData }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     lotNumber: userData.lotNo,
-                    lotName: userData.lotName
+                    lotNumber: userData.lotNo,
+                    lotName: userData.lotName,
+                    collegeName: userData.collegeName
                 })
             });
         } catch (err) {
@@ -156,6 +177,7 @@ const EditorLayout = ({ userData }) => {
     const stateRef = React.useRef({
         codeMap: {},
         metrics: { time: 3600000 },
+        initialDuration: 3600000,
         completedPatterns: [],
         currentCode: '',
         currentPattern: null,
@@ -168,13 +190,14 @@ const EditorLayout = ({ userData }) => {
         stateRef.current = {
             codeMap,
             metrics,
+            initialDuration,
             completedPatterns,
             currentCode,
             currentPattern,
             attempts,
             warningCount
         };
-    }, [codeMap, metrics, completedPatterns, currentCode, currentPattern, attempts, warningCount]);
+    }, [codeMap, metrics, initialDuration, completedPatterns, currentCode, currentPattern, attempts, warningCount]);
 
     // Helper: Calculate Totals
     const calculateTotalStats = (map) => {
@@ -209,7 +232,7 @@ const EditorLayout = ({ userData }) => {
             }
 
             const { totalLOC, totalLoops } = calculateTotalStats(cleanMap);
-            const timeTaken = 3600000 - currentState.metrics.time;
+            const timeTaken = currentState.initialDuration - currentState.metrics.time;
 
             await fetch(`${import.meta.env.VITE_API_URL}/api/update-progress`, {
                 method: 'POST',
@@ -247,33 +270,49 @@ const EditorLayout = ({ userData }) => {
 
         try {
             const isC = language === 'c';
-            const runtime = isC ? { language: 'c', version: '10.2.0' } : { language: 'java', version: '15.0.2' };
+            // const runtime = isC ? { language: 'c', version: '10.2.0' } : { language: 'java', version: '15.0.2' };
 
-            const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/execute`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    language: runtime.language,
-                    version: runtime.version,
-                    files: [{
-                        content: currentCode
-                    }]
+                    language,
+                    code: currentCode,
+                    lotNumber: userData.lotNo
                 })
             });
 
             const result = await response.json();
             setIsRunning(false);
 
+            if (!response.ok) {
+                // Handle Queue/Limit Errors
+                const type = response.status === 429 ? 'warning' : 'error';
+                const msg = result.message || 'Execution Failed';
+                setLogs(prev => [...prev, { time: new Date().toLocaleTimeString(), text: `> Server: ${msg}`, type }]);
+                return;
+            }
+
             if (result.run) {
                 const output = result.run.stdout || result.run.stderr;
+                const signal = result.run.signal;
+
+                let displayOutput = output;
+                let logType = result.run.stderr ? 'error' : 'output';
+
+                if (signal) {
+                    displayOutput = `>>> PROCESS TERMINATED: ${signal} (Likely Time/Memory Limit Exceeded) <<<`;
+                    logType = 'error';
+                }
+
                 setLogs(prev => [...prev,
                 { time: new Date().toLocaleTimeString(), text: '> Execution Complete.', type: 'system' },
                 { time: '', text: 'Output:', type: 'system' },
-                { time: '', text: output, type: result.run.stderr ? 'error' : 'output' }
+                { time: '', text: displayOutput, type: logType }
                 ]);
 
-                // Pattern Matching Validation
-                if (!result.run.stderr && checkPatternMatch(output)) {
+                // Pattern Matching Validation (Only if no signal and no stderr)
+                if (!signal && !result.run.stderr && checkPatternMatch(output)) {
                     // Add to completed list
                     const newCompleted = [...completedPatterns];
                     let isNewCompletion = false;
@@ -314,7 +353,7 @@ const EditorLayout = ({ userData }) => {
                         setIsSuccess(true);
                         setIsSessionActive(false);
                         // --- SYNC SUCCESS ---
-                        const timeTaken = 3600000 - metrics.time;
+                        const timeTaken = initialDuration - metrics.time;
 
                         // Prepare Final Stats
                         const finalMap = { ...codeMap, [currentPattern.id]: currentCode };
@@ -450,6 +489,7 @@ const EditorLayout = ({ userData }) => {
                     console.log("SETTING DURATION TO:", durationMs);
                     if (!isSessionActive) {
                         setMetrics(prev => ({ ...prev, time: durationMs }));
+                        setInitialDuration(durationMs);
                     }
                 }
             } catch (err) { console.error("Error fetching settings:", err); }
@@ -538,7 +578,8 @@ const EditorLayout = ({ userData }) => {
                 {/* Center: Language & Controls */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
                     <select value={language} onChange={handleLanguageChange} disabled={isSessionActive} style={{
-                        background: '#252526', color: isSessionActive ? '#777' : '#fff', border: '1px solid #3e3e42', padding: '4px 8px', borderRadius: '3px', fontFamily: 'Consolas', outline: 'none', cursor: isSessionActive ? 'not-allowed' : 'pointer', opacity: isSessionActive ? 0.6 : 1
+                        background: '#000', color: isSessionActive ? '#777' : '#00ff41', border: '2px solid #00ff41', padding: '6px 15px', borderRadius: '4px', fontFamily: 'Orbitron, sans-serif', outline: 'none', cursor: isSessionActive ? 'not-allowed' : 'pointer', opacity: isSessionActive ? 0.6 : 1,
+                        boxShadow: '0 0 15px rgba(0, 255, 65, 0.4)', fontWeight: 'bold', letterSpacing: '1px', transition: 'all 0.3s'
                     }}>
                         <option value="c">C (GCC 10.2)</option>
                         <option value="java">Java (OpenJDK 15)</option>
@@ -555,9 +596,15 @@ const EditorLayout = ({ userData }) => {
                             }}>START SYSTEM</button>
                         )
                     ) : (
-                        <button onClick={handleRun} disabled={isRunning || isSuccess} style={{
-                            background: isSuccess ? '#00ff00' : (isRunning ? '#444' : '#00cc00'), border: 'none', padding: '8px 25px', color: isSuccess ? '#000' : '#fff', fontWeight: 'bold', fontFamily: 'Orbitron', display: 'flex', alignItems: 'center', gap: '8px', cursor: (isRunning || isSuccess) ? 'default' : 'pointer', borderRadius: '2px', boxShadow: isRunning ? 'none' : '0 0 15px rgba(0, 204, 0, 0.6)', textShadow: '0 0 5px black'
-                        }}>{isSuccess ? 'MATCHED!' : (isRunning ? 'EXECUTING...' : 'RUN_CODE')}</button>
+                        completedPatterns.includes(currentPattern?.id) ? (
+                            <span style={{ color: '#00ff41', fontFamily: 'Orbitron', fontSize: '0.9rem', fontWeight: 'bold', textShadow: '0 0 10px rgba(0,255,65,0.5)' }}>
+                                [ PATTERN SECURED ]
+                            </span>
+                        ) : (
+                            <button onClick={handleRun} disabled={isRunning || isSuccess} style={{
+                                background: isSuccess ? '#00ff00' : (isRunning ? '#444' : '#00cc00'), border: 'none', padding: '8px 25px', color: isSuccess ? '#000' : '#fff', fontWeight: 'bold', fontFamily: 'Orbitron', display: 'flex', alignItems: 'center', gap: '8px', cursor: (isRunning || isSuccess) ? 'default' : 'pointer', borderRadius: '2px', boxShadow: isRunning ? 'none' : '0 0 15px rgba(0, 204, 0, 0.6)', textShadow: '0 0 5px black'
+                            }}>{isSuccess ? 'MATCHED!' : (isRunning ? 'EXECUTING...' : 'RUN_CODE')}</button>
+                        )
                     )}
                 </div>
 
@@ -569,9 +616,37 @@ const EditorLayout = ({ userData }) => {
                         <span>{formatTime(metrics.time)}</span>
                     </div>
 
-                    <div className="user-profile" style={{ textAlign: 'right', fontSize: '0.8rem', fontFamily: 'Consolas', lineHeight: '1.2' }}>
-                        <div style={{ color: '#888' }}>LOGGED_IN_AS</div>
-                        <div style={{ color: '#ff00ff', fontWeight: 'bold' }}>{userData.lotName || 'GUEST'}</div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', height: '100%' }}>
+                    {/* Institute Profile Block */}
+                    {userData.collegeName && (
+                        <div className="institute-profile" style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
+                            fontFamily: 'Consolas', fontSize: '0.8rem', lineHeight: '1.4',
+                            borderRight: '1px solid #333', paddingRight: '15px', height: '70%', justifyContent: 'center'
+                        }}>
+                            <div style={{ color: '#666', fontSize: '0.7rem', letterSpacing: '1px' }}>INSTITUTE</div>
+                            <div style={{
+                                color: '#00ccff', fontWeight: 'bold', fontSize: '0.9rem',
+                                maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                textShadow: '0 0 5px rgba(0, 204, 255, 0.4)'
+                            }}>
+                                {userData.collegeName}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* User Profile Block */}
+                    <div className="user-profile" style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
+                        fontFamily: 'Consolas', fontSize: '0.8rem', lineHeight: '1.4',
+                        height: '70%', justifyContent: 'center'
+                    }}>
+                        <div style={{ color: '#666', fontSize: '0.7rem', letterSpacing: '1px' }}>SESSION_USER</div>
+                        <div style={{ color: '#ff00ff', fontWeight: 'bold', fontSize: '1rem', textShadow: '0 0 5px rgba(255, 0, 255, 0.4)' }}>
+                            {userData.lotName || 'GUEST'}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -654,10 +729,32 @@ const EditorLayout = ({ userData }) => {
                                 </div>
                             )}
 
-                            {/* SYSTEM LOCKED OVERLAY: Only show if session is NOT active AND NOT success */}
-                            {!isSessionActive && !isSuccess && (
+                            {/* SYSTEM LOCKED OVERLAY: Only show if session is NOT active AND NOT success AND NOT disqualified */}
+                            {!isSessionActive && !isSuccess && !isDisqualified && (
                                 <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#00ffff', fontFamily: 'Orbitron', letterSpacing: '2px', zIndex: 10 }}>
                                     SYSTEM LOCKED
+                                </div>
+                            )}
+
+                            {/* DISQUALIFIED OVERLAY */}
+                            {isDisqualified && (
+                                <div style={{
+                                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                                    background: 'rgba(20, 0, 0, 0.95)',
+                                    display: 'flex', flexDirection: 'column',
+                                    justifyContent: 'center', alignItems: 'center',
+                                    zIndex: 100,
+                                    backdropFilter: 'blur(5px)'
+                                }}>
+                                    <h1 style={{
+                                        color: '#ff0000', fontFamily: 'Orbitron', fontSize: '4rem',
+                                        textShadow: '0 0 20px red', marginBottom: '20px',
+                                        animation: 'pulse 1s infinite'
+                                    }}>TIME'S UP</h1>
+                                    <h2 style={{ color: '#fff', fontFamily: 'monospace', fontSize: '2rem' }}>SYSTEM DISCONNECTED</h2>
+                                    <div style={{ marginTop: '30px', border: '1px solid red', padding: '15px 30px', color: 'red' }}>
+                                        SESSION TERMINATED DUE TO TIMEOUT
+                                    </div>
                                 </div>
                             )}
                             {/* SUCCESS OVERLAY */}
@@ -754,42 +851,44 @@ const EditorLayout = ({ userData }) => {
 
             {/* Lower Terminal */}
             {/* Lower Terminal - HIDDEN ON SUCCESS */}
-            {!isSuccess && (
-                <>
-                    {/* DRAG HANDLE */}
-                    <div
-                        onMouseDown={startResizing}
-                        style={{
-                            height: '5px',
-                            background: isResizing ? '#00ffff' : '#333',
-                            cursor: 'ns-resize',
-                            transition: 'background 0.2s',
-                            zIndex: 100
-                        }}
-                    />
+            {
+                !isSuccess && (
+                    <>
+                        {/* DRAG HANDLE */}
+                        <div
+                            onMouseDown={startResizing}
+                            style={{
+                                height: '5px',
+                                background: isResizing ? '#00ffff' : '#333',
+                                cursor: 'ns-resize',
+                                transition: 'background 0.2s',
+                                zIndex: 100
+                            }}
+                        />
 
-                    <div className="lower-pane" style={{ height: `${terminalHeight}px`, flexShrink: 0, position: 'relative' }}>
-                        <div style={{ height: '100%', flexShrink: 0, borderTop: '2px solid #00ffff' }}>
-                            <Terminal logs={logs} onClear={handleClearLogs} />
+                        <div className="lower-pane" style={{ height: `${terminalHeight}px`, flexShrink: 0, position: 'relative' }}>
+                            <div style={{ height: '100%', flexShrink: 0, borderTop: '2px solid #00ffff' }}>
+                                <Terminal logs={logs} onClear={handleClearLogs} />
+                            </div>
+                            {/* NOTE BELOW TERMINAL */}
+                            <div style={{
+                                position: 'absolute',
+                                bottom: '5px',
+                                right: '10px',
+                                color: '#ffaa00',
+                                fontSize: '0.8rem',
+                                fontFamily: 'Consolas',
+                                background: 'rgba(0,0,0,0.8)',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                border: '1px solid #ffaa00'
+                            }}>
+                                Note: After selecting a programming language, all patterns must be done in the same language.
+                            </div>
                         </div>
-                        {/* NOTE BELOW TERMINAL */}
-                        <div style={{
-                            position: 'absolute',
-                            bottom: '5px',
-                            right: '10px',
-                            color: '#ffaa00',
-                            fontSize: '0.8rem',
-                            fontFamily: 'Consolas',
-                            background: 'rgba(0,0,0,0.8)',
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            border: '1px solid #ffaa00'
-                        }}>
-                            Note: After selecting a programming language, all patterns must be done in the same language.
-                        </div>
-                    </div>
-                </>
-            )}
+                    </>
+                )
+            }
 
             <style>{`
                 /* 3D Grid Animation */
@@ -885,7 +984,7 @@ const EditorLayout = ({ userData }) => {
                   80%, 99.9% { margin-top: 30%; margin-left: 80%; }
                 }
             `}</style>
-        </div>
+        </div >
     );
 };
 export default EditorLayout;

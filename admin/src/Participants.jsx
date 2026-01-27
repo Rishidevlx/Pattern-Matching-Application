@@ -8,6 +8,8 @@ const Participants = () => {
     const [loading, setLoading] = useState(true);
     const [selectedUser, setSelectedUser] = useState(null); // For Code View Modal
     const [deleteConfirm, setDeleteConfirm] = useState(null); // For Delete Confirmation
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all');
 
     useEffect(() => {
         fetchParticipants();
@@ -57,28 +59,83 @@ const Participants = () => {
         }
     };
 
+
+
+    // Filter Logic
+    const filteredParticipants = participants.filter(user => {
+        const term = searchTerm.toLowerCase();
+        const matchesSearch = (user.lot_name?.toLowerCase() || '').includes(term) ||
+            (user.lot_number?.toString().toLowerCase() || '').includes(term) ||
+            (user.college_name?.toLowerCase() || '').includes(term);
+
+        const matchesFilter = filterStatus === 'all' || user.status === filterStatus;
+
+        return matchesSearch && matchesFilter;
+    });
+
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="participants-page">
             <h2 style={{ borderBottom: '1px solid #333', paddingBottom: '10px' }}>PARTICIPANT_DATABASE</h2>
 
-            <div className="table-container" style={{ marginTop: '20px' }}>
+            {/* CONTROLS */}
+            <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', marginTop: '20px' }}>
+                <input
+                    type="text"
+                    placeholder="Search by Name, Lot #, or College..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                        padding: '10px 15px',
+                        background: '#111',
+                        border: '1px solid #333',
+                        color: '#fff',
+                        borderRadius: '4px',
+                        flex: 1,
+                        outline: 'none',
+                        fontFamily: 'Consolas'
+                    }}
+                />
+                <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    style={{
+                        padding: '10px 15px',
+                        background: '#111',
+                        border: '1px solid #333',
+                        color: '#fff',
+                        borderRadius: '4px',
+                        outline: 'none',
+                        cursor: 'pointer',
+                        fontFamily: 'Consolas'
+                    }}
+                >
+                    <option value="all">ALL STATUS</option>
+                    <option value="active">Active</option>
+                    <option value="finished">Finished</option>
+                    <option value="disqualified">Disqualified</option>
+                </select>
+            </div>
+
+            <div className="table-container">
                 <table style={{ width: '100%', borderCollapse: 'collapse', color: '#fff' }}>
                     <thead>
                         <tr style={{ background: '#0a0a0a', color: '#00ff41', borderBottom: '2px solid #00ff41' }}>
                             <th style={{ padding: '15px', textAlign: 'left' }}>LOT #</th>
                             <th style={{ padding: '15px', textAlign: 'left' }}>NAME</th>
+                            <th style={{ padding: '15px', textAlign: 'left' }}>COLLEGE</th>
                             <th style={{ padding: '15px', textAlign: 'center' }}>STATUS</th>
                             <th style={{ padding: '15px', textAlign: 'center' }}>PATTERNS</th>
-                            <th style={{ padding: '15px', textAlign: 'center' }}>TIME</th>
+                            <th style={{ padding: '15px', textAlign: 'center' }}>TIME (HR:MN:SC:MS)</th>
                             <th style={{ padding: '15px', textAlign: 'center' }}>ATTEMPTS</th>
                             <th style={{ padding: '15px', textAlign: 'center' }}>ACTIONS</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {participants.map(user => (
+                        {filteredParticipants.map(user => (
                             <tr key={user.lot_number} style={{ borderBottom: '1px solid #333' }}>
                                 <td style={{ padding: '15px', fontFamily: 'monospace' }}>{user.lot_number}</td>
                                 <td style={{ padding: '15px' }}>{user.lot_name}</td>
+                                <td style={{ padding: '15px', color: '#aaa' }}>{user.college_name || '-'}</td>
                                 <td style={{ padding: '15px', textAlign: 'center' }}>
                                     <span style={{
                                         color: user.status === 'finished' ? '#00ff41' : user.status === 'active' ? '#00ffff' : '#ff0055',
