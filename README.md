@@ -1,169 +1,150 @@
-A web-based code execution platform and pattern matching contest system built with full frontend and backend support. Participants can write code (C/Java) for pattern problems, the system handles execution queueing, session management, and real-time leaderboard updates.
+# ⚡ PATTERN MATCHING APPLICATION ⚡  
+### 🧠 _Hack the Pattern. Beat the Clock._
 
-🚀 Overview
+> **A Hacker-Style Competitive Pattern Matching Platform**  
+> Built for speed, fairness, and real-time execution control.
 
-This project is an interactive Pattern Matching IDE + admin dashboard for programming contests. It enables:
+---
 
-Live user code execution (C/Java) using a backend execution queue
+## 🕶️ SYSTEM STATUS
+```diff
++ SESSION CONTROLLED
++ EXECUTION QUEUE ACTIVE
++ JAVA JVM PROTECTED
+- API OVERLOAD BLOCKED
+🧩 WHAT IS THIS?
+Pattern Matching Application is a full-stack competitive coding system designed for
+⚔️ college contests / hackathons / coding rounds.
 
-Admin control over sessions (start/stop/timeout)
+Participants write C / Java code to solve pattern problems.
+The system handles:
 
-Leaderboards & participant management
+⚙️ Secure code execution
 
-Pattern display in browser with timer and status updates
+⏱️ Session-based time control
 
-This project is deployed with a server backend on Render and frontend hosted on Netlify.
+🚦 Queue & cooldown protection
 
-📦 Features
+📊 Live leaderboard with college details
 
-✨ User Interface (IDE)
+All wrapped inside a cyber-punk / hacker-style IDE.
 
-Code editor with language selection (Java/OpenJDK 15, C)
+🚀 CORE FEATURES
+🖥️ HACKER IDE
+Language selector (C / Java – OpenJDK 15)
 
-Pattern preview in real time
+Live pattern output preview
 
-Timer synced with backend session settings
+Locked editor until session starts
 
-🚀 Execution Queue & Limits
+Countdown timer synced with backend
 
-Execution routed via backend (/api/execute)
+🚦 EXECUTION QUEUE SYSTEM (ANTI-CRASH)
+Language	Parallel	Cooldown	Memory	Timeout
+C	5	5s	64MB	2s
+Java	1	10–15s	128MB	2s
+→ Direct compiler calls ❌
+→ Backend queue control ✅
+→ JVM overload ❌
+→ Fair execution ✅
+🛑 SESSION SECURITY
+Global SESSION ACTIVE control (Admin)
 
-C: up to 5 concurrent jobs
+Auto disqualification when time runs out
 
-Java: 1 at a time → safe JVM usage
+Backend is the single source of truth
 
-Cooldown & queue size protections prevent overload
+Session state persisted (restart safe)
 
-Auto queue handling and busy/cooldown UI alerts
+🧑‍💼 ADMIN DASHBOARD
+🏆 Leaderboard with College Name
 
-📊 Admin Dashboard
+🔍 Participants Search (Lot No / Name / College)
 
-Leaderboard with college names
+🎛️ Filter by Status (Active / Finished / Disqualified)
 
-Participants list with search & filter (Name, Lot No, College, Status)
+▶️ Start / Stop Session Control
 
-Session control and duration management
-
-🔒 Session Management
-
-Backend session state persisted
-
-Users can run code only during active sessions
-
-Auto disqualification after time’s up
-
-📁 Database
-
-System config, patterns, users with status & timing
-
-📌 Table of Contents
-
-Demo / Screenshots
-
-Tech Stack
-
-Getting Started
-
-Environment Setup
-
-Usage
-
-API Endpoints
-
-Contribution
-
-License
-
-📸 Demo / Screenshots
-
-(Optional: Include screenshots of your IDE and Admin Dashboard here)
-
-🛠 Tech Stack
+🧠 ARCHITECTURE (HIGH LEVEL)
+User IDE (Netlify)
+     ↓
+Backend API (Render)
+     ↓
+Execution Queue
+     ↓
+Piston Engine
+     ↓
+Result → Leaderboard
++ Frontend NEVER talks to compiler directly
++ Backend enforces rules, limits, fairness
+🛠️ TECH STACK
 Layer	Technology
-Frontend	React + Vite + Netlify
+Frontend	React + Vite
 Backend	Node.js + Express
-Execution	Piston API (queued via backend)
-Database	MySQL (or any SQL)
-Deployment	Render (backend), Netlify (frontend)
-🚀 Getting Started
-1. Clone the repository
+Compiler Engine	Piston (via queue)
+Database	MySQL
+Hosting	Netlify (FE) + Render (BE)
+⚙️ SETUP (LOCAL)
+🔹 Clone
 git clone https://github.com/Rishidevlx/Pattern-Matching-Application.git
 cd Pattern-Matching-Application
-
-2. Install backend dependencies
+🔹 Backend
 cd backend
 npm install
-
-3. Set up environment variables
-
-Create a .env file in backend:
+node server.js
+Create .env:
 
 PORT=5000
-DB_HOST=your_database_host
-DB_USER=your_db_user
-DB_PASS=your_db_password
+DB_HOST=localhost
+DB_USER=root
+DB_PASS=*****
 DB_NAME=pattern_matching
-
-4. Start the backend
-node server.js
-
-5. Setup and run frontend
-cd src
+🔹 Frontend
 npm install
 npm run dev
-
-📋 Usage
-🖥 Frontend
-
-Open the app in browser
-
-Select language
-
-Write code
-
-Click Run Code
-
-Watch console & pattern preview
-
-🛠 Admin Panel
-
-Open Admin Dashboard
-
-Start a session
-
-Monitor participants
-
-View leaderboard
-
-📌 API Endpoints
-
-Here are the primary backend endpoints:
-
+🔌 KEY API ENDPOINTS
 Endpoint	Method	Purpose
-/api/execute	POST	Execute user code through queue
+/api/execute	POST	Execute code via queue
+/api/session/start	POST	Start contest
+/api/session/stop	POST	Stop contest
 /api/update-progress	POST	Update user status
-/api/session/start	POST	Start competition session
-/api/session/stop	POST	Stop session
+🧪 SECURITY & SAFETY
++ Infinite loops auto-killed
++ Memory abuse blocked
++ Cooldown prevents spam
++ Session spoofing impossible
+No Docker.
+No direct execution.
+No backend crash.
 
-(Add more detailed API docs if needed)
+🏴‍☠️ WHY THIS PROJECT IS DIFFERENT
+Most online compilers:
 
-🤝 Contribution
+❌ Crash under load
 
-Contributions are welcome! To contribute:
+❌ JVM overload
 
-Fork this repository
+❌ No fairness
 
-Create your feature branch (git checkout -b feature/xyz)
+This system:
 
-Commit your changes
+✅ Queue-based execution
 
-Push to the branch
+✅ Language-aware limits
 
-Open a Pull Request
+✅ Contest-grade architecture
 
-Whether it’s a bug fix, new feature, or documentation update, all help is appreciated!
+Built like real competitive coding platforms.
 
-📜 License
+🤝 CONTRIBUTING
+Want to improve the system?
 
-This project is licensed under the MIT License — see the LICENSE
- file for details.
+git checkout -b feature/your-feature
+git commit -m "Add something cool"
+git push
+Pull requests are welcome 🧠⚡
+
+📜 LICENSE
+MIT License.
+Hack it. Learn from it. Improve it.
+
