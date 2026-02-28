@@ -346,8 +346,11 @@ const JDOODLE_KEYS = [
     { id: "314ca30886bd9620faafe84a5a0c4ebb", secret: "c5c89a82ce82dc00d0983371b8b6313d4435b8aaac6b20dc03892ef6e63c4487" },
     { id: "9b7149e8f712ebe613986a00957e3edb", secret: "5ace899a89ab28e7060c5e7cac49205df46387367e9d58d96bc379e7ce08fdce" },
     { id: "4b8d713065b8a0e847e698912c745460", secret: "5ffb6c31effdf8914baabda5ec20bb461e1b7b75ecbcf2e825a0b3f5c7ff26b9" },
-    { id: "decd504ec47ed1355d951fe5779d0fe4", secret: "db582301b8d5e24094bd8e2f51293ece3198a377d3b8cb933d799416acb2a401"},
-    { id: "196cb515a1006555e7ace58f43fc4c17", secret: "5befa1e4d25d261b6deff0b916fcc82d4a15fd3c7bd1fc0046e4990feb86b85b"}
+    { id: "decd504ec47ed1355d951fe5779d0fe4", secret: "db582301b8d5e24094bd8e2f51293ece3198a377d3b8cb933d799416acb2a401" },
+    { id: "196cb515a1006555e7ace58f43fc4c17", secret: "5befa1e4d25d261b6deff0b916fcc82d4a15fd3c7bd1fc0046e4990feb86b85b" },
+    { id: "b5d77dc299692b52116de24ffbbf19ac", secret: "3f1840cca41b59d9b0e694cd26c969f9c38b3de9d49e895299ce08af6234270d" },
+    { id: "ef832f26f387fdabc20f1ab5600fd398", secret:"6cd152d68ddd2d04c3ef229f60fb6afb6291ad137ea0246ee7734b7bbf948ab2"  },
+    { id: "f979e6144c4a43700876fcad294de5c0", secret: "1e9a334be85af822673e25547a5b94e362b00fbccd355cb57a740517042e3138" }
 ];
 let currentJdoodleKeyIndex = 0;
 
