@@ -482,7 +482,7 @@ const EditorLayout = ({ userData, onLogout }) => {
             return str
                 .replace(/\r\n/g, '\n')
                 .split('\n')
-                .map(line => line.trim())
+                .map(line => line.trimEnd())
                 .filter(line => line !== '')
                 .join('\n');
         };
